@@ -1,75 +1,37 @@
 use anyhow::Result;
-use gumdrop::Options;
-use std::{env, fs, path::PathBuf};
-
-#[derive(Debug, Options)]
-struct AppOptions {
-    #[options(free)]
-    free: Vec<String>,
-
-    #[options(help = "Shows the not-so-helpful help message.")]
-    help: bool,
-
-    #[options(help = "The directory to search. Defaults to the currently open one.")]
-    dir: Option<String>,
-}
-
-fn leven(a: &str, b: &str) -> u8 {
-    if a.is_empty() {
-        return b.len() as u8;
-    }
-
-    if b.is_empty() {
-        return a.len() as u8;
-    }
-
-    // `.expect()` is not nessessary on `.nth()` as we already checked for if the strings are empty
-    if a.chars().nth(0).unwrap().to_ascii_lowercase()
-        == b.chars().nth(0).unwrap().to_ascii_lowercase()
-    {
-        return leven(&a[1..], &b[1..]);
-    }
-
-    let a_tailed = leven(&a[1..], b);
-    let b_tailed = leven(a, &b[1..]);
-    let a_b_tailed = leven(&a[1..], &b[1..]);
-
-    a_tailed.min(b_tailed).min(a_b_tailed) + 1
-}
-
-fn recursive_match(search: &str, path: PathBuf) -> Result<Vec<(u8, PathBuf)>> {
-    let mut matches: Vec<(u8, PathBuf)> = vec![];
-    for i in fs::read_dir(path)? {
-        let entry = i?;
-        if entry.metadata()?.is_dir() {
-            matches.append(&mut recursive_match(search, entry.path())?);
-        } else {
-            matches.push((
-                leven(search, entry.file_name().to_str().unwrap()),
-                entry.path(),
-            ))
-        }
-    }
-    Ok(matches)
-}
+use fdr::{
+    cli::{draw_file_table, AppOptions},
+    levenstein_distance,
+    recursive_match::{recursive_match, MatchOptions},
+};
+use std::path::PathBuf;
 
 fn main() -> Result<()> {
-    let opts: AppOptions = AppOptions::parse_args_default_or_exit();
-    let dir = match opts.dir {
-        Some(dir) => fs::canonicalize(dir).expect("Get root dir path from CLI argument."),
-        None => env::current_dir().expect("Get current dir as root dir."),
-    };
-
-    if opts.free.is_empty() {
-        panic!("No Argument supplied"); //todo! return a dir listing instead ??
+    // Parse arguments.
+    let args: AppOptions = AppOptions::parse();
+    if !args.has_free_args() {
+        panic!("No search argument supplied"); //todo! return a dir listing instead ??
     }
 
-    let search = opts.free[0].as_str();
-    let mut results: Vec<(u8, PathBuf)> = recursive_match(search, dir)?;
+    let dir = args.path();
+    let search = args.get_free().to_ascii_lowercase();
+    let opts = MatchOptions::new(args.depth());
 
-    results.sort_by(|(a, _), (b, _)| a.cmp(b));
+    // Find all matches satisfying `opts` MatchOptions.
+    let mut result_paths: Vec<PathBuf> = recursive_match(search.as_ref(), &dir, &opts)?;
 
-    dbg!(results);
+    // Sort according to levenstein distance (probably not the best way, but sounds cool).
+    result_paths.sort_by_cached_key(|path| {
+        levenstein_distance(&search, path.file_name().unwrap().to_str().unwrap())
+    });
 
+    // Make paths relative to root directory, and then turn them into strings..
+    let result = result_paths
+        .iter()
+        .map(|path| path.strip_prefix(&dir).unwrap().display().to_string())
+        .collect::<Vec<String>>();
+
+    // ..and finally draw them.
+    draw_file_table(&result);
     Ok(())
 }
