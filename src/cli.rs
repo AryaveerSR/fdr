@@ -3,6 +3,7 @@
 use gumdrop::Options;
 use std::{env, fs, path::PathBuf};
 
+// The commandline arguments accepted by the tool.
 #[derive(Debug, Options)]
 pub struct AppOptions {
     #[options(free)]
@@ -18,6 +19,7 @@ pub struct AppOptions {
     depth: Option<u8>,
 }
 
+// Some utility functions to make code tidy elsewhere.
 impl AppOptions {
     pub fn parse() -> Self {
         Self::parse_args_default_or_exit()
@@ -28,12 +30,16 @@ impl AppOptions {
     }
 
     pub fn get_free(&self) -> &str {
+        if self.free.is_empty() {
+            return "";
+        }
         &self.free[0]
     }
 
     pub fn path(&self) -> PathBuf {
         match &self.dir {
             Some(dir) => fs::canonicalize(dir).expect("Get root dir path from CLI argument."),
+            // Use the currently open directory if no path is specified.
             None => env::current_dir().expect("Get current dir as root dir."),
         }
     }

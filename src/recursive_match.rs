@@ -9,15 +9,18 @@ use std::{
 pub struct MatchOptions {
     /// Maximum depth of recursion.
     pub depth: u8,
+    /// If to match every single file, used if no search argument is defined.
+    pub match_all: bool,
 }
 
 impl MatchOptions {
     // Default constants for options.
     const DEFAULT_DEPTH: u8 = 3;
 
-    pub fn new(depth: Option<u8>) -> Self {
+    pub fn new(depth: Option<u8>, match_all: bool) -> Self {
         Self {
             depth: depth.unwrap_or(Self::DEFAULT_DEPTH),
+            match_all,
         }
     }
 }
@@ -26,12 +29,16 @@ impl MatchOptions {
 /// as `opts` of type `MatchOptions`.
 pub fn recursive_match(search: &str, path: &PathBuf, opts: &MatchOptions) -> Result<Vec<PathBuf>> {
     // Use the `opts` to create an closure that checks if a file satisfies the conditions..
-    let file_match = |file: &DirEntry| {
-        file.file_name()
-            .to_ascii_lowercase()
-            .to_str()
-            .unwrap()
-            .contains(search)
+    let file_match = move |file: &DirEntry| {
+        if opts.match_all {
+            true
+        } else {
+            file.file_name()
+                .to_ascii_lowercase()
+                .to_str()
+                .unwrap()
+                .contains(search)
+        }
     };
     // ..and another closure to decide whether to traverse a subdirectory provided depth isn't exceeded.
     let folder_match = |_folder: &DirEntry| true;

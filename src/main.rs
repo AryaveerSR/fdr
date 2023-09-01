@@ -9,13 +9,10 @@ use std::path::PathBuf;
 fn main() -> Result<()> {
     // Parse arguments.
     let args: AppOptions = AppOptions::parse();
-    if !args.has_free_args() {
-        panic!("No search argument supplied"); //todo! return a dir listing instead ??
-    }
 
     let dir = args.path();
     let search = args.get_free().to_ascii_lowercase();
-    let opts = MatchOptions::new(args.depth());
+    let opts = MatchOptions::new(args.depth(), !args.has_free_args());
 
     // Find all matches satisfying `opts` MatchOptions.
     let mut result_paths: Vec<PathBuf> = recursive_match(search.as_ref(), &dir, &opts)?;
