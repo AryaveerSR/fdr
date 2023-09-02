@@ -1,5 +1,3 @@
 pub mod cli;
-mod levenstein_distance;
+pub mod pattern;
 pub mod recursive_match;
-
-pub use levenstein_distance::levenstein_distance;

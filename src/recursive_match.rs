@@ -1,3 +1,4 @@
+use crate::pattern::Pattern;
 use anyhow::{Context, Result};
 use std::{
     fs::{self, DirEntry},
@@ -9,42 +10,54 @@ use std::{
 pub struct MatchOptions {
     /// Maximum depth of recursion.
     pub depth: u8,
-    /// If to match every single file, used if no search argument is defined.
-    pub match_all: bool,
+    /// Should you include folders in the results
+    pub include_folders: bool,
 }
 
 impl MatchOptions {
     // Default constants for options.
     const DEFAULT_DEPTH: u8 = 3;
 
-    pub fn new(depth: Option<u8>, match_all: bool) -> Self {
+    pub fn new(depth: Option<u8>, include_folders: bool) -> Self {
         Self {
             depth: depth.unwrap_or(Self::DEFAULT_DEPTH),
-            match_all,
+            include_folders,
         }
     }
 }
 
 /// Function to recursively match files in a directory (and its subdirectories) using user defined parameters passed
 /// as `opts` of type `MatchOptions`.
-pub fn recursive_match(search: &str, path: &PathBuf, opts: &MatchOptions) -> Result<Vec<PathBuf>> {
+pub fn recursive_match(
+    pattern: &Vec<Pattern>,
+    path: &PathBuf,
+    opts: MatchOptions,
+) -> Result<Vec<PathBuf>> {
+    let depth = opts.depth.clone();
+
     // Use the `opts` to create an closure that checks if a file satisfies the conditions..
     let file_match = move |file: &DirEntry| {
-        if opts.match_all {
-            true
+        // Get a reference
+        let opts = &opts;
+
+        if file.metadata().unwrap().is_file() {
+            let mut does_match = true;
+            for i in pattern {
+                if !i.matches(&file.path().to_path_buf()) {
+                    does_match = false;
+                }
+            }
+
+            does_match
         } else {
-            file.file_name()
-                .to_ascii_lowercase()
-                .to_str()
-                .unwrap()
-                .contains(search)
+            opts.include_folders
         }
     };
     // ..and another closure to decide whether to traverse a subdirectory provided depth isn't exceeded.
     let folder_match = |_folder: &DirEntry| true;
 
     // Run the internal recursive function and return the results.
-    in_recursive_match(&file_match, &folder_match, path, opts.depth)
+    in_recursive_match(&file_match, &folder_match, path, depth)
 }
 
 /// The actual recursive function to loop over all entries that satisfy the `file_match` and `folder_match` closures.
@@ -62,7 +75,13 @@ fn in_recursive_match(
     for i in fs::read_dir(path).context("Cannot read directory.")? {
         let entry = i?;
 
-        // If its another directory, check if the depth isn't exceeded and that it matches the `folder_match`..
+        // Check if the entry satisfies the closure..
+        if file_match(&entry) {
+            // ..and push to `matches` if it satisfies.
+            matches.push(entry.path())
+        }
+
+        // If its a directory, check if the depth isn't exceeded and that it matches the `folder_match`..
         if entry.metadata()?.is_dir() && depth != 0 && folder_match(&entry) {
             // ..and run itself for the subdirectory (decreasing depth by 1), and merge all entries into the `matches` vec.
             matches.append(&mut in_recursive_match(
@@ -71,11 +90,6 @@ fn in_recursive_match(
                 &entry.path(),
                 depth - 1,
             )?);
-
-        // Or if its a file, run the `file_match` on it..
-        } else if file_match(&entry) {
-            // ..and push to `matches` if it satisfies.
-            matches.push(entry.path())
         }
     }
 

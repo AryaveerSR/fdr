@@ -16,7 +16,10 @@ pub struct AppOptions {
     dir: Option<String>,
 
     #[options(help = "Maximum depth to search.")]
-    depth: Option<u8>,
+    pub depth: Option<u8>,
+
+    #[options(help = "If it should include folders in the results.")]
+    pub folders: bool,
 }
 
 // Some utility functions to make code tidy elsewhere.
@@ -29,11 +32,8 @@ impl AppOptions {
         !self.free.is_empty()
     }
 
-    pub fn get_free(&self) -> &str {
-        if self.free.is_empty() {
-            return "";
-        }
-        &self.free[0]
+    pub fn get_free(&self) -> &Vec<String> {
+        &self.free
     }
 
     pub fn path(&self) -> PathBuf {
@@ -43,15 +43,22 @@ impl AppOptions {
             None => env::current_dir().expect("Get current dir as root dir."),
         }
     }
+}
 
-    pub fn depth(&self) -> Option<u8> {
-        self.depth
+pub struct Entry {
+    content: String,
+    is_file: bool,
+}
+
+impl Entry {
+    pub fn new(content: String, is_file: bool) -> Self {
+        Entry { content, is_file }
     }
 }
 
 // Glyphs for reference for future-me : ─│╭╮╰╯┼┴┬┤├
 /// Function to draw a table displaying entries as a table with serial numbers.
-pub fn draw_file_table(files: &Vec<String>) {
+pub fn draw_file_table(files: &Vec<Entry>) {
     // Getting the maximum number of digits the serial numbers will occupy.
     // Used to calculate the width of the serial column.
     let max_sr_len = (0..)
@@ -63,8 +70,8 @@ pub fn draw_file_table(files: &Vec<String>) {
     let max_path_len = {
         let mut x = 0;
 
-        for path in files {
-            let len = path.len();
+        for entry in files {
+            let len = entry.content.len();
             x = x.max(len);
         }
 
@@ -94,7 +101,15 @@ pub fn draw_file_table(files: &Vec<String>) {
     );
     // Loop over all entries.
     for (i, entry) in files.iter().enumerate() {
-        println!("│ {:<sr_padding$} │ {:<file_padding$} │", i + 1, entry);
+        // Display the serial number.
+        print!("│ {:<sr_padding$} │ ", i + 1);
+        // ..check the entry type and color ahoy!
+        if entry.is_file {
+            print!("\x1b[92m{:<file_padding$}\x1b[m", entry.content);
+        } else {
+            print!("\x1b[93m{:<file_padding$}\x1b[m", entry.content);
+        }
+        println!(" │");
     }
 
     // Finally its over.
@@ -103,4 +118,6 @@ pub fn draw_file_table(files: &Vec<String>) {
         "─".repeat(sr_padding),
         "─".repeat(file_padding),
     );
+
+    print!("\x1b[m");
 }
