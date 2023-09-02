@@ -13,7 +13,7 @@ pub struct AppOptions {
     help: bool,
 
     #[options(help = "The directory to search. Defaults to the currently open one.")]
-    dir: Option<String>,
+    root: Option<String>,
 
     #[options(help = "Maximum depth to search.")]
     pub depth: Option<u8>,
@@ -37,7 +37,7 @@ impl AppOptions {
     }
 
     pub fn path(&self) -> PathBuf {
-        match &self.dir {
+        match &self.root {
             Some(dir) => fs::canonicalize(dir).expect("Get root dir path from CLI argument."),
             // Use the currently open directory if no path is specified.
             None => env::current_dir().expect("Get current dir as root dir."),
