@@ -1,3 +1,6 @@
+//! Module implementing the `recursive_match` function, which, well, recursively matches files (and folders!)
+//! in a given directory.
+
 use crate::pattern::Pattern;
 use anyhow::{Context, Result};
 use std::{
@@ -40,17 +43,18 @@ pub fn recursive_match(
         // Get a reference
         let opts = &opts;
 
-        if file.metadata().unwrap().is_file() {
-            let mut does_match = true;
-            for i in pattern {
-                if !i.matches(&file.path().to_path_buf()) {
-                    does_match = false;
-                }
+        let mut does_match = true;
+        // The variable stays true only if the file matches all patterns.
+        for i in pattern {
+            if !i.matches(&file.path().to_path_buf()) {
+                does_match = false;
             }
+        }
 
+        if file.metadata().unwrap().is_file() {
             does_match
         } else {
-            opts.include_folders
+            opts.include_folders && does_match
         }
     };
     // ..and another closure to decide whether to traverse a subdirectory provided depth isn't exceeded.
